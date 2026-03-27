@@ -4,7 +4,12 @@
         <p class="lead">Бесплатно проверяйте сайты на SEO пригодность</p>
         <form action="/urls" method="post" class="row">
             <div class="col-8">
-                <input type="text" name="url" value="" class="form-control form-control-lg" placeholder="https://www.example.com">
+                <input type="text" name="url" value="<?= htmlspecialchars($url) ?>" class="form-control form-control-lg <?= isset($errors['url']) ? 'is-invalid' : '' ?>" placeholder="https://www.example.com">
+                 <?php if (isset($errors['url'])): ?>
+                    <div class="invalid-feedback">
+                        <?= implode(', ', $errors['url']) ?>
+                     </div>
+<?php endif; ?>
             </div>
             <div class="col-4">
                 <input type="submit" class="btn btn-primary btn-lg px-5 text-uppercase" value="Проверить">

@@ -19,11 +19,17 @@
     <main class="flex-grow-1">
         <?php if (!empty($flash)): ?>
             <div class="container mt-3">
-                <?php foreach ($flash as $message): ?>
-                    <div class="alert alert-info"><?= htmlspecialchars($message) ?></div>
+                <?php foreach ($flash as $type => $messages): ?>
+                    <?php foreach ($messages as $message): ?>
+                        <div class="alert alert-<?= htmlspecialchars($type) ?> alert-dismissible fade show" role="alert">
+                            <?= htmlspecialchars($message) ?>
+                            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                        </div>
+                    <?php endforeach; ?>
                 <?php endforeach; ?>
             </div>
         <?php endif; ?>
+
 
         <div class="container-lg mt-3">
             <?= $content ?>

@@ -1,0 +1,27 @@
+<div class="container-lg mt-5">
+    <div class="table-responsive">
+        <h1 class="display-5 mb-4">Сайты</h1>
+        <table class="table table-bordered table-hover mt-3" data-test="urls">
+            <thead class="table-light">
+                <tr>
+                    <th scope="col">ID</th>
+                    <th scope="col">Имя</th>
+                    <th scope="col">Последняя проверка</th>
+                    <th scope="col">Код ответа</th>
+                </tr>
+            </thead>
+            <tbody>
+                <?php foreach ($urls as $url): ?>
+                    <tr>
+                        <td><?= htmlspecialchars($url['id']) ?></td>
+                        <td>
+                            <a href="/urls/<?= htmlspecialchars($url['id']) ?>"><?= htmlspecialchars($url['name']) ?></a>
+                        </td>
+                        <td></td>
+                        <td></td>
+                    </tr>
+                <?php endforeach; ?>
+            </tbody>
+        </table>
+    </div>
+</div>
