@@ -97,10 +97,15 @@ $app->get('/urls', function ($request, $response) {
     $flash = $this->get('flash')->getMessages();
 
     $pdo = $this->get(\PDO::class);
-    $sql = "SELECT urls.id AS id, urls.name AS name, MAX(url_checks.created_at) AS last_check
-            FROM urls LEFT JOIN url_checks ON urls.id = url_checks.url_id 
-            GROUP BY urls.id, urls.name, urls.created_at
-            ORDER BY urls.created_at DESC";
+    $sql = "SELECT DISTINCT ON (urls.id)
+            urls.id,
+            urls.name,
+            urls.created_at,
+            url_checks.created_at AS last_check,
+            url_checks.status_code AS last_status_code
+            FROM urls
+            LEFT JOIN url_checks ON urls.id = url_checks.url_id
+            ORDER BY urls.id, url_checks.created_at DESC";
     $stmt = $pdo->prepare($sql);
     $stmt->execute();
     $urls = $stmt->fetchAll();
@@ -117,18 +122,38 @@ $app->post('/urls/{id}/checks', function ($request, $response, $args) use ($rout
 
     $url_id = $args['id'];
 
+    $pdo = $this->get(\PDO::class);
+    $urlSql = "SELECT name FROM urls WHERE id = :id";
+    $stmt = $pdo->prepare($urlSql);
+    $stmt->bindParam(':id', $url_id);
+    $stmt->execute();
+    $normalizedUrl = $stmt->fetchColumn();
+
+    $client = new \GuzzleHttp\Client(['timeout' => 2.0]);
+
     try {
+        $guzzleResponse = $client->get($normalizedUrl);
+        $statusCode = $guzzleResponse->getStatusCode();
+        $html = (string) $guzzleResponse->getBody();
+    } catch (\GuzzleHttp\Exception\ConnectException $e) {
+        $statusCode = null;
+        $this->get('flash')->addMessage('danger', "Произошла ошибка при проверке, не удалось подключиться");
+    } catch (\GuzzleHttp\Exception\RequestException $e) {
+        $statusCode = $e->getResponse() ? $e->getResponse()->getStatusCode() : 500;
+    }
+
+    if ($statusCode !== null) {
         $pdo = $this->get(\PDO::class);
         $createdAt = \Carbon\Carbon::now()->toDateTimeString();
-        $sql = "INSERT INTO url_checks (url_id, created_at) VALUES (:url_id, :created_at)";
+        $sql = "INSERT INTO url_checks (url_id, status_code, created_at) VALUES (:url_id, :status_code, :created_at)";
         $stmt = $pdo->prepare($sql);
-        $stmt->bindParam(':url_id', $url_id);
-        $stmt->bindParam(':created_at', $createdAt);
-        $stmt->execute();
+        $stmt->execute([
+           ':url_id' => $url_id,
+           ':status_code' => $statusCode,
+           ':created_at' => $createdAt
+        ]);
 
         $this->get('flash')->addMessage('success', "Страница успешно проверена");
-    } catch (\PDOException $e) {
-        $this->get('flash')->addMessage('danger', "Произошла ошибка при проверке, не удалось подключиться");
     }
 
     return $response->withRedirect($router->urlFor('url', ['id' => $url_id]), 303);
