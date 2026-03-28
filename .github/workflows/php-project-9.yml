@@ -15,5 +15,5 @@ jobs:
           php-version: '8.4'
           extensions: mbstring, xml, ctype, iconv, pdo_pgsql
 
-        run: make install
-        run: make lint
+      - run: make install
+      - run: make lint
