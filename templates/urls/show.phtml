@@ -24,7 +24,7 @@
     <h2 class="mt-5 mb-3">Проверки</h2>
     
     <form method="post" action="/urls/<?= htmlspecialchars($url['id']) ?>/checks">
-        <input type="submit" class="btn btn-primary mb-3" value="Запустить проверку"></button>
+        <input type="submit" class="btn btn-primary mb-3" value="Запустить проверку">
     </form>
 
     <div class="table-responsive">
@@ -40,7 +40,6 @@
                 </tr>
             </thead>
             <tbody>
-    <?php /* 
     <?php foreach ($checks as $check): ?>
         <tr>
             <td><?= htmlspecialchars($check['id']) ?></td>
@@ -51,7 +50,6 @@
             <td><?= htmlspecialchars($check['created_at']) ?></td>
         </tr>
     <?php endforeach; ?>
-    */ ?>
             </tbody>
         </table>
     </div>

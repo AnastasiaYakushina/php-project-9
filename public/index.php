@@ -68,16 +68,27 @@ $app->get('/urls/{id}', function ($request, $response, $args) {
     $id = $args['id'];
 
     $pdo = $this->get(\PDO::class);
-    $sql = "SELECT * FROM urls WHERE id = :id";
-    $stmt = $pdo->prepare($sql);
+    $urlSql = "SELECT * FROM urls WHERE id = :id";
+    $stmt = $pdo->prepare($urlSql);
     $stmt->bindParam(':id', $id);
     $stmt->execute();
     $url = $stmt->fetch();
+
+    try {
+        $checksSql = "SELECT * FROM url_checks WHERE url_id = :id";
+        $stmt = $pdo->prepare($checksSql);
+        $stmt->bindParam(':id', $id);
+        $stmt->execute();
+        $checks = $stmt->fetchAll();
+    } catch (\PDOException $e) {
+        $checks = [];
+    }
 
     $params = [
         'url' => $url,
         'errors' => [],
         'flash' => $flash,
+        'checks' => $checks,
     ];
     return $this->get('renderer')->render($response, 'urls/show.phtml', $params);
 })->setName('url');
@@ -86,7 +97,10 @@ $app->get('/urls', function ($request, $response) {
     $flash = $this->get('flash')->getMessages();
 
     $pdo = $this->get(\PDO::class);
-    $sql = "SELECT * FROM urls ORDER BY created_at DESC";
+    $sql = "SELECT urls.id AS id, urls.name AS name, MAX(url_checks.created_at) AS last_check
+            FROM urls LEFT JOIN url_checks ON urls.id = url_checks.url_id 
+            GROUP BY urls.id, urls.name, urls.created_at
+            ORDER BY urls.created_at DESC";
     $stmt = $pdo->prepare($sql);
     $stmt->execute();
     $urls = $stmt->fetchAll();
@@ -98,6 +112,27 @@ $app->get('/urls', function ($request, $response) {
     ];
     return $this->get('renderer')->render($response, 'urls/index.phtml', $params);
 })->setName('urls');
+
+$app->post('/urls/{id}/checks', function ($request, $response, $args) use ($router) {
+
+    $url_id = $args['id'];
+
+    try {
+        $pdo = $this->get(\PDO::class);
+        $createdAt = \Carbon\Carbon::now()->toDateTimeString();
+        $sql = "INSERT INTO url_checks (url_id, created_at) VALUES (:url_id, :created_at)";
+        $stmt = $pdo->prepare($sql);
+        $stmt->bindParam(':url_id', $url_id);
+        $stmt->bindParam(':created_at', $createdAt);
+        $stmt->execute();
+
+        $this->get('flash')->addMessage('success', "Страница успешно проверена");
+    } catch (\PDOException $e) {
+        $this->get('flash')->addMessage('danger', "Произошла ошибка при проверке, не удалось подключиться");
+    }
+
+    return $response->withRedirect($router->urlFor('url', ['id' => $url_id]), 303);
+});
 
 $app->post('/urls', function ($request, $response) use ($router) {
 
