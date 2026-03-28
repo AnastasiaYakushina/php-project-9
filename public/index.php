@@ -105,7 +105,7 @@ $app->post('/urls', function ($request, $response) use ($router) {
     $url = $data['url'] ?? '';
 
     $parsedUrl = parse_url(strtolower(trim($url)));
-    
+
     $scheme = isset($parsedUrl['scheme']) ? strtolower($parsedUrl['scheme']) : 'http';
     $host = isset($parsedUrl['host']) ? strtolower($parsedUrl['host']) : '';
 
@@ -116,7 +116,7 @@ $app->post('/urls', function ($request, $response) use ($router) {
     }
 
     $validator = new \Valitron\Validator(['url' => $normalizedUrl]);
-  
+
     $validator->rule('required', 'url')->message('URL не должен быть пустым');
     $validator->rule('url', 'url')->message('Некорректный URL');
     $validator->rule('lengthMax', 'url', 255)->message('URL превышает 255 символов');
@@ -132,10 +132,9 @@ $app->post('/urls', function ($request, $response) use ($router) {
             $stmt->execute();
 
             $id = $pdo->lastInsertId();
-            
+
             $this->get('flash')->addMessage('success', "Страница успешно добавлена");
             return $response->withRedirect($router->urlFor('url', ['id' => $id]), 303);
-
         } catch (\PDOException $e) {
             if ($e->getCode() === '23505') {
                 $this->get('flash')->addMessage('danger', "Страница уже существует");
