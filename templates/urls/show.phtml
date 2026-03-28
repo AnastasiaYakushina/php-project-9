@@ -44,9 +44,9 @@
         <tr>
             <td><?= htmlspecialchars($check['id']) ?></td>
             <td><?= htmlspecialchars($check['status_code'] ?? '') ?></td>
-            <td><?= htmlspecialchars($check['h1'] ?? '') ?></td>
-            <td><?= htmlspecialchars($check['title'] ?? '') ?></td>
-            <td><?= htmlspecialchars($check['description'] ?? '') ?></td>
+            <td><?= htmlspecialchars(mb_strimwidth($check['h1'] ?? '', 0, 200, "...") ?? '') ?></td>
+            <td><?= htmlspecialchars(mb_strimwidth($check['title'] ?? '', 0, 200, "...") ?? '') ?></td>
+            <td><?= htmlspecialchars(mb_strimwidth($check['description'] ?? '', 0, 200, "...") ?? '') ?></td>
             <td><?= htmlspecialchars($check['created_at']) ?></td>
         </tr>
     <?php endforeach; ?>

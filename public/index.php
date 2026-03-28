@@ -131,12 +131,21 @@ $app->post('/urls/{id}/checks', function ($request, $response, $args) use ($rout
 
     $client = new \GuzzleHttp\Client(['timeout' => 2.0]);
 
+    $statusCode = null;
+    $h1 = '';
+    $title = '';
+    $description = '';
+
     try {
         $guzzleResponse = $client->get($normalizedUrl);
         $statusCode = $guzzleResponse->getStatusCode();
         $html = (string) $guzzleResponse->getBody();
+        $crawler = new \Symfony\Component\DomCrawler\Crawler($html);
+
+        $h1 = optional($crawler->filter('h1')->getNode(0))->textContent;
+        $title = optional($crawler->filter('title')->getNode(0))->textContent;
+        $description = optional($crawler->filter('meta[name="description"]')->getNode(0))->getAttribute('content');
     } catch (\GuzzleHttp\Exception\ConnectException $e) {
-        $statusCode = null;
         $this->get('flash')->addMessage('danger', "Произошла ошибка при проверке, не удалось подключиться");
     } catch (\GuzzleHttp\Exception\RequestException $e) {
         $statusCode = $e->getResponse() ? $e->getResponse()->getStatusCode() : 500;
@@ -145,11 +154,15 @@ $app->post('/urls/{id}/checks', function ($request, $response, $args) use ($rout
     if ($statusCode !== null) {
         $pdo = $this->get(\PDO::class);
         $createdAt = \Carbon\Carbon::now()->toDateTimeString();
-        $sql = "INSERT INTO url_checks (url_id, status_code, created_at) VALUES (:url_id, :status_code, :created_at)";
+        $sql = "INSERT INTO url_checks (url_id, status_code, h1, title, description, created_at)
+                VALUES (:url_id, :status_code, :h1, :title, :description, :created_at)";
         $stmt = $pdo->prepare($sql);
         $stmt->execute([
            ':url_id' => $url_id,
            ':status_code' => $statusCode,
+           ':h1' => $h1,
+           ':title' => $title,
+           ':description' => $description,
            ':created_at' => $createdAt
         ]);
 
