@@ -75,7 +75,7 @@ $app->get('/urls/{id}', function ($request, $response, $args) {
     $url = $stmt->fetch();
 
     try {
-        $checksSql = "SELECT * FROM url_checks WHERE url_id = :id";
+        $checksSql = "SELECT * FROM url_checks WHERE url_id = :id ORDER BY created_at DESC";
         $stmt = $pdo->prepare($checksSql);
         $stmt->bindParam(':id', $id);
         $stmt->execute();
@@ -105,10 +105,16 @@ $app->get('/urls', function ($request, $response) {
             url_checks.status_code AS last_status_code
             FROM urls
             LEFT JOIN url_checks ON urls.id = url_checks.url_id
-            ORDER BY urls.id, url_checks.created_at DESC";
+            ORDER BY urls.id, url_checks.created_at";
     $stmt = $pdo->prepare($sql);
     $stmt->execute();
     $urls = $stmt->fetchAll();
+
+    usort($urls, function ($a, $b) {
+        $dateA = $a['last_check'] ?? '0000-00-00 00:00:00';
+        $dateB = $b['last_check'] ?? '0000-00-00 00:00:00';
+        return strcmp($dateB, $dateA);
+    });
 
     $params = [
         'urls' => $urls,
