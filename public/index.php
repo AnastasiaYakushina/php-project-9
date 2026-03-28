@@ -77,8 +77,7 @@ $app->get('/urls/{id}', function ($request, $response, $args) {
     try {
         $checksSql = "SELECT * FROM url_checks WHERE url_id = :id ORDER BY created_at DESC";
         $stmt = $pdo->prepare($checksSql);
-        $stmt->bindParam(':id', $id);
-        $stmt->execute();
+        $stmt->execute([':id' => $id]);
         $checks = $stmt->fetchAll();
     } catch (\PDOException $e) {
         $checks = [];
@@ -105,7 +104,7 @@ $app->get('/urls', function ($request, $response) {
             url_checks.status_code AS last_status_code
             FROM urls
             LEFT JOIN url_checks ON urls.id = url_checks.url_id
-            ORDER BY urls.id, url_checks.created_at";
+            ORDER BY urls.id, url_checks.created_at DESC";
     $stmt = $pdo->prepare($sql);
     $stmt->execute();
     $urls = $stmt->fetchAll();
@@ -131,8 +130,7 @@ $app->post('/urls/{id}/checks', function ($request, $response, $args) use ($rout
     $pdo = $this->get(\PDO::class);
     $urlSql = "SELECT name FROM urls WHERE id = :id";
     $stmt = $pdo->prepare($urlSql);
-    $stmt->bindParam(':id', $url_id);
-    $stmt->execute();
+    $stmt->execute([':id' => $url_id]);
     $normalizedUrl = $stmt->fetchColumn();
 
     $client = new \GuzzleHttp\Client(['timeout' => 2.0]);
@@ -158,7 +156,6 @@ $app->post('/urls/{id}/checks', function ($request, $response, $args) use ($rout
     }
 
     if ($statusCode !== null) {
-        $pdo = $this->get(\PDO::class);
         $createdAt = \Carbon\Carbon::now()->toDateTimeString();
         $sql = "INSERT INTO url_checks (url_id, status_code, h1, title, description, created_at)
                 VALUES (:url_id, :status_code, :h1, :title, :description, :created_at)";
@@ -206,9 +203,7 @@ $app->post('/urls', function ($request, $response) use ($router) {
             $createdAt = \Carbon\Carbon::now()->toDateTimeString();
             $sql = "INSERT INTO urls (name, created_at) VALUES (:name, :created_at)";
             $stmt = $pdo->prepare($sql);
-            $stmt->bindParam(':name', $normalizedUrl);
-            $stmt->bindParam(':created_at', $createdAt);
-            $stmt->execute();
+            $stmt->execute([':name' => $normalizedUrl, ':created_at' => $createdAt]);
 
             $id = $pdo->lastInsertId();
 
