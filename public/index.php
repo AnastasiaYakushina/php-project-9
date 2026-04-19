@@ -133,7 +133,7 @@ $app->post('/urls/{id}/checks', function ($request, $response, $args) use ($rout
     $stmt->execute([':id' => $url_id]);
     $normalizedUrl = $stmt->fetchColumn();
 
-    $client = new \GuzzleHttp\Client(['timeout' => 2.0]);
+    $client = new \GuzzleHttp\Client(['timeout' => 5.0]);
 
     $statusCode = null;
     $h1 = '';
@@ -149,13 +149,17 @@ $app->post('/urls/{id}/checks', function ($request, $response, $args) use ($rout
         $h1 = optional($crawler->filter('h1')->getNode(0))->textContent;
         $title = optional($crawler->filter('title')->getNode(0))->textContent;
         $description = optional($crawler->filter('meta[name="description"]')->getNode(0))->getAttribute('content');
-    } catch (\GuzzleHttp\Exception\ConnectException $e) {
-        $this->get('flash')->addMessage('danger', "Произошла ошибка при проверке, не удалось подключиться");
+
+        $this->get('flash')->addMessage('success', "Страница успешно проверена");
     } catch (\GuzzleHttp\Exception\RequestException $e) {
         $statusCode = $e->getResponse() ? $e->getResponse()->getStatusCode() : 500;
+        $this->get('flash')->addMessage('success', "Страница успешно проверена");
+    } catch (\Exception $e) {
+        $this->get('flash')->addMessage('danger', "Произошла ошибка при проверке, не удалось подключиться");
+        return $response->withRedirect($router->urlFor('url', ['id' => $url_id]), 303);
     }
 
-    if ($statusCode !== null) {
+    if (isset($statusCode)) {
         $createdAt = \Carbon\Carbon::now()->toDateTimeString();
         $sql = "INSERT INTO url_checks (url_id, status_code, h1, title, description, created_at)
                 VALUES (:url_id, :status_code, :h1, :title, :description, :created_at)";
@@ -168,8 +172,6 @@ $app->post('/urls/{id}/checks', function ($request, $response, $args) use ($rout
            ':description' => $description,
            ':created_at' => $createdAt
         ]);
-
-        $this->get('flash')->addMessage('success', "Страница успешно проверена");
     }
 
     return $response->withRedirect($router->urlFor('url', ['id' => $url_id]), 303);
