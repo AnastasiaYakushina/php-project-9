@@ -151,20 +151,18 @@ $app->post('/urls/{id}/checks', function ($request, $response, $args) use ($rout
         $description = optional($crawler->filter('meta[name="description"]')->getNode(0))->getAttribute('content');
 
         $this->get('flash')->addMessage('success', "Страница успешно проверена");
+    } catch (\GuzzleHttp\Exception\BadResponseException $e) {
+        $statusCode = $e->getResponse()->getStatusCode();
+        $this->get('flash')->addMessage('success', "Страница успешно проверена");
     } catch (\GuzzleHttp\Exception\TransferException $e) {
-        if ($e->hasResponse()) {
-            $statusCode = $e->getResponse()->getStatusCode();
-            $this->get('flash')->addMessage('success', "Страница успешно проверена");
-        } else {
-            $this->get('flash')->addMessage('danger', "Произошла ошибка при проверке, не удалось подключиться");
-            return $response->withRedirect($router->urlFor('url', ['id' => $url_id]), 303);
-        }
+        $this->get('flash')->addMessage('danger', "Произошла ошибка при проверке, не удалось подключиться");
+        return $response->withRedirect($router->urlFor('url', ['id' => $url_id]), 303);
     } catch (\Exception $e) {
         $this->get('flash')->addMessage('danger', "Произошла ошибка при проверке, не удалось подключиться");
         return $response->withRedirect($router->urlFor('url', ['id' => $url_id]), 303);
     }
 
-    if (isset($statusCode)) {
+    if ($statusCode !== null) {
         $createdAt = \Carbon\Carbon::now()->toDateTimeString();
         $sql = "INSERT INTO url_checks (url_id, status_code, h1, title, description, created_at)
                 VALUES (:url_id, :status_code, :h1, :title, :description, :created_at)";
