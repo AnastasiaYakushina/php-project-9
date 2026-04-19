@@ -208,13 +208,16 @@ $app->post('/urls', function ($request, $response) use ($router) {
             $id = $pdo->lastInsertId();
 
             $this->get('flash')->addMessage('success', "Страница успешно добавлена");
-            return $response->withRedirect($router->urlFor('url', ['id' => $id]), 303);
         } catch (\PDOException $e) {
             if ($e->getCode() === '23505') {
+                $stmt = $pdo->prepare("SELECT id FROM urls WHERE name = :name");
+                $stmt->execute([':name' => $normalizedUrl]);
+                $id = $stmt->fetchColumn();
+
                 $this->get('flash')->addMessage('danger', "Страница уже существует");
-                return $response->withRedirect($router->urlFor('home'), 303);
             }
         }
+        return $response->withRedirect($router->urlFor('url', ['id' => $id]), 303);
     }
 
     $params = ['url' => $url,
