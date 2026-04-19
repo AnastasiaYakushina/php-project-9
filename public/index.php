@@ -133,7 +133,7 @@ $app->post('/urls/{id}/checks', function ($request, $response, $args) use ($rout
     $stmt->execute([':id' => $url_id]);
     $normalizedUrl = $stmt->fetchColumn();
 
-    $client = new \GuzzleHttp\Client(['timeout' => 5.0]);
+    $client = new \GuzzleHttp\Client(['timeout' => 5.0, 'http_errors' => true]);
 
     $statusCode = null;
     $h1 = '';
@@ -151,16 +151,9 @@ $app->post('/urls/{id}/checks', function ($request, $response, $args) use ($rout
         $description = optional($crawler->filter('meta[name="description"]')->getNode(0))->getAttribute('content');
 
         $this->get('flash')->addMessage('success', "Страница успешно проверена");
-    } catch (\GuzzleHttp\Exception\TransferException $e) {
-        if ($e->hasResponse()) {
-            $statusCode = $e->getResponse()->getStatusCode();
-            $this->get('flash')->addMessage('success', "Страница успешно проверена");
-        } else {
-            $this->get('flash')->addMessage('danger', "Произошла ошибка при проверке, не удалось подключиться");
-            return $response->withRedirect($router->urlFor('url', ['id' => $url_id]), 303);
-        }
     } catch (\Exception $e) {
         $this->get('flash')->addMessage('danger', "Произошла ошибка при проверке, не удалось подключиться");
+
         return $response->withRedirect($router->urlFor('url', ['id' => $url_id]), 303);
     }
 
