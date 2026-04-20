@@ -29,20 +29,29 @@ $container->set('renderer', function () {
 $container->set(\PDO::class, function () {
     $databaseUrl = getenv('DATABASE_URL');
 
+    if ($databaseUrl === false) {
+        throw new \RuntimeException("Некорректный DATABASE_URL");
+    }
+
     $databaseUrlParams = parse_url($databaseUrl);
 
-    if ($databaseUrlParams === false) {
-        throw new \RuntimeException("Некорректный DATABASE_URL");
+    if (!isset($databaseUrlParams['host'])) {
+        throw new \RuntimeException("Отсутствует хост");
     }
 
     $dsn = sprintf(
         "pgsql:host=%s;port=%d;dbname=%s",
         $databaseUrlParams['host'],
         $databaseUrlParams['port'] ?? 5432,
-        ltrim($databaseUrlParams['path'], '/')
+        ltrim($databaseUrlParams['path'] ?? '', '/')
     );
 
-    $conn = new \PDO($dsn, $databaseUrlParams['user'], $databaseUrlParams['pass']);
+    $conn = new \PDO(
+        $dsn,
+        $databaseUrlParams['user'] ?? null,
+        $databaseUrlParams['pass'] ?? null
+    );
+
     $conn->setAttribute(\PDO::ATTR_ERRMODE, \PDO::ERRMODE_EXCEPTION);
     $conn->setAttribute(\PDO::ATTR_DEFAULT_FETCH_MODE, \PDO::FETCH_ASSOC);
 
@@ -154,7 +163,7 @@ $app->post('/urls/{id}/checks', function ($request, $response, $args) use ($rout
 
         $h1 = $crawler->filter('h1')->getNode(0)?->textContent;
         $title = $crawler->filter('title')->getNode(0)?->textContent;
-        $description = $crawler->filter('meta[name="description"]')->getNode(0)?->getAttribute('content');
+        $description = $crawler->filter('meta[name="description"]')->attr('content');
 
         $this->get('flash')->addMessage('success', "Страница успешно проверена");
     } catch (\Exception $e) {
