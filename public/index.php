@@ -125,12 +125,12 @@ $app->get('/urls', function ($request, $response) {
 
 $app->post('/urls/{id}/checks', function ($request, $response, $args) use ($router) {
 
-    $url_id = $args['id'];
+    $urlId = $args['id'];
 
     $pdo = $this->get(\PDO::class);
     $urlSql = "SELECT name FROM urls WHERE id = :id";
     $stmt = $pdo->prepare($urlSql);
-    $stmt->execute([':id' => $url_id]);
+    $stmt->execute([':id' => $urlId]);
     $normalizedUrl = $stmt->fetchColumn();
 
     $client = new \GuzzleHttp\Client(['timeout' => 5.0, 'http_errors' => true]);
@@ -154,7 +154,7 @@ $app->post('/urls/{id}/checks', function ($request, $response, $args) use ($rout
     } catch (\Exception $e) {
         $this->get('flash')->addMessage('danger', "Произошла ошибка при проверке, не удалось подключиться");
 
-        return $response->withRedirect($router->urlFor('url', ['id' => $url_id]), 303);
+        return $response->withRedirect($router->urlFor('url', ['id' => $urlId]), 303);
     }
 
     if ($statusCode !== null) {
@@ -163,7 +163,7 @@ $app->post('/urls/{id}/checks', function ($request, $response, $args) use ($rout
                 VALUES (:url_id, :status_code, :h1, :title, :description, :created_at)";
         $stmt = $pdo->prepare($sql);
         $stmt->execute([
-           ':url_id' => $url_id,
+           ':url_id' => $urlId,
            ':status_code' => $statusCode,
            ':h1' => $h1,
            ':title' => $title,
@@ -172,7 +172,7 @@ $app->post('/urls/{id}/checks', function ($request, $response, $args) use ($rout
         ]);
     }
 
-    return $response->withRedirect($router->urlFor('url', ['id' => $url_id]), 303);
+    return $response->withRedirect($router->urlFor('url', ['id' => $urlId]), 303);
 });
 
 $app->post('/urls', function ($request, $response) use ($router) {
