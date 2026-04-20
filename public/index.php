@@ -11,8 +11,10 @@ $envFile = dirname(__DIR__) . '/.env';
 
 if (file_exists($envFile)) {
     $lines = file($envFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
-    foreach ($lines as $line) {
-        putenv(trim($line));
+    if (is_array($lines)) {
+        foreach ($lines as $line) {
+            putenv(trim($line));
+        }
     }
 }
 
@@ -28,6 +30,10 @@ $container->set(\PDO::class, function () {
     $databaseUrl = getenv('DATABASE_URL');
 
     $databaseUrlParams = parse_url($databaseUrl);
+
+    if ($databaseUrlParams === false) {
+        throw new \RuntimeException("Некорректный DATABASE_URL");
+    }
 
     $dsn = sprintf(
         "pgsql:host=%s;port=%d;dbname=%s",
@@ -146,9 +152,9 @@ $app->post('/urls/{id}/checks', function ($request, $response, $args) use ($rout
         $html = (string) $guzzleResponse->getBody();
         $crawler = new \Symfony\Component\DomCrawler\Crawler($html);
 
-        $h1 = optional($crawler->filter('h1')->getNode(0))->textContent;
-        $title = optional($crawler->filter('title')->getNode(0))->textContent;
-        $description = optional($crawler->filter('meta[name="description"]')->getNode(0))->getAttribute('content');
+        $h1 = $crawler->filter('h1')->getNode(0)?->textContent;
+        $title = $crawler->filter('title')->getNode(0)?->textContent;
+        $description = $crawler->filter('meta[name="description"]')->getNode(0)?->getAttribute('content');
 
         $this->get('flash')->addMessage('success', "Страница успешно проверена");
     } catch (\Exception $e) {
@@ -157,20 +163,18 @@ $app->post('/urls/{id}/checks', function ($request, $response, $args) use ($rout
         return $response->withRedirect($router->urlFor('url', ['id' => $urlId]), 303);
     }
 
-    if ($statusCode !== null) {
-        $createdAt = \Carbon\Carbon::now()->toDateTimeString();
-        $sql = "INSERT INTO url_checks (url_id, status_code, h1, title, description, created_at)
+    $createdAt = \Carbon\Carbon::now()->toDateTimeString();
+    $sql = "INSERT INTO url_checks (url_id, status_code, h1, title, description, created_at)
                 VALUES (:url_id, :status_code, :h1, :title, :description, :created_at)";
-        $stmt = $pdo->prepare($sql);
-        $stmt->execute([
-           ':url_id' => $urlId,
-           ':status_code' => $statusCode,
-           ':h1' => $h1,
-           ':title' => $title,
-           ':description' => $description,
-           ':created_at' => $createdAt
-        ]);
-    }
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute([
+        ':url_id' => $urlId,
+        ':status_code' => $statusCode,
+        ':h1' => $h1,
+        ':title' => $title,
+        ':description' => $description,
+        ':created_at' => $createdAt
+    ]);
 
     return $response->withRedirect($router->urlFor('url', ['id' => $urlId]), 303);
 });
@@ -197,9 +201,11 @@ $app->post('/urls', function ($request, $response) use ($router) {
     $validator->rule('url', 'url')->message('Некорректный URL');
     $validator->rule('lengthMax', 'url', 255)->message('URL превышает 255 символов');
 
+    $pdo = $this->get(\PDO::class);
+    $id = null;
+
     if ($validator->validate()) {
         try {
-            $pdo = $this->get(\PDO::class);
             $createdAt = \Carbon\Carbon::now()->toDateTimeString();
             $sql = "INSERT INTO urls (name, created_at) VALUES (:name, :created_at)";
             $stmt = $pdo->prepare($sql);
