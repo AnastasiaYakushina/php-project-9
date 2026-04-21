@@ -197,7 +197,7 @@ $app->post('/urls/{id:\d+}/checks', function ($request, $response, $args) use ($
     $stmt->execute([':id' => $urlId]);
     $normalizedUrl = $stmt->fetchColumn();
 
-    $client = new Client(['timeout' => 5.0, 'http_errors' => false]);
+    $client = new Client(['timeout' => 5.0, 'http_errors' => true]);
 
     try {
         $guzzleResponse = $client->get($normalizedUrl);
