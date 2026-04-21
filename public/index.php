@@ -205,8 +205,8 @@ $app->post('/urls/{id:\d+}/checks', function ($request, $response, $args) use ($
         $html = (string) $guzzleResponse->getBody();
         $crawler = new Crawler($html);
 
-        $h1 = $crawler->filter('h1')->getNode(0)?->textContent ?? '';
-        $title = $crawler->filter('title')->getNode(0)?->textContent ?? '';
+        $h1 = $crawler->filter('h1')->count() > 0 ? $crawler->filter('h1')->text() : '';
+        $title = $crawler->filter('title')->count() > 0 ? $crawler->filter('title')->text() : '';
 
         $description = $crawler->filter('meta[name="description"]')->count() > 0
         ? $crawler->filter('meta[name="description"]')->attr('content')
