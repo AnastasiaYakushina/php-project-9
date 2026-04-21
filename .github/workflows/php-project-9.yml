@@ -9,6 +9,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 
 
       - uses: shivammathur/setup-php@v2
         with:
@@ -17,3 +19,9 @@ jobs:
 
       - run: make install
       - run: make lint
+      
+      - name: SonarQube Scan
+        uses: sonarsource/sonarqube-scan-action@master
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
