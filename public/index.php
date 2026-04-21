@@ -5,7 +5,14 @@ require __DIR__ . '/../vendor/autoload.php';
 session_start();
 
 use Slim\Factory\AppFactory;
+use Slim\Exception\HttpNotFoundException;
+use Slim\Views\PhpRenderer;
+use Slim\Flash\Messages;
 use DI\Container;
+use GuzzleHttp\Client;
+use Symfony\Component\DomCrawler\Crawler;
+use Carbon\Carbon;
+use Valitron\Validator;
 
 $envFile = dirname(__DIR__) . '/.env';
 
@@ -21,22 +28,22 @@ if (file_exists($envFile)) {
 $container = new Container();
 
 $container->set('renderer', function () {
-    $renderer = new \Slim\Views\PhpRenderer(__DIR__ . '/../templates');
+    $renderer = new PhpRenderer(__DIR__ . '/../templates');
     $renderer->setLayout('layout.phtml');
     return $renderer;
 });
 
-$container->set(\PDO::class, function () {
+$container->set(PDO::class, function () {
     $databaseUrl = getenv('DATABASE_URL');
 
     if ($databaseUrl === false) {
-        throw new \RuntimeException("Некорректный DATABASE_URL");
+        throw new RuntimeException("Некорректный DATABASE_URL");
     }
 
     $databaseUrlParams = parse_url($databaseUrl);
 
     if (!isset($databaseUrlParams['host'])) {
-        throw new \RuntimeException("Отсутствует хост");
+        throw new RuntimeException("Отсутствует хост");
     }
 
     $dsn = sprintf(
@@ -46,133 +53,173 @@ $container->set(\PDO::class, function () {
         ltrim($databaseUrlParams['path'] ?? '', '/')
     );
 
-    $conn = new \PDO(
+    $conn = new PDO(
         $dsn,
         $databaseUrlParams['user'] ?? null,
         $databaseUrlParams['pass'] ?? null
     );
 
-    $conn->setAttribute(\PDO::ATTR_ERRMODE, \PDO::ERRMODE_EXCEPTION);
-    $conn->setAttribute(\PDO::ATTR_DEFAULT_FETCH_MODE, \PDO::FETCH_ASSOC);
+    $conn->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+    $conn->setAttribute(PDO::ATTR_DEFAULT_FETCH_MODE, PDO::FETCH_ASSOC);
 
     return $conn;
 });
 
 $container->set('flash', function () {
-    return new Slim\Flash\Messages();
+    return new Messages();
 });
 
 $app = AppFactory::createFromContainer($container);
 
 $router = $app->getRouteCollector()->getRouteParser();
 
-$app->get('/', function ($request, $response) {
-    $flash = $this->get('flash')->getMessages();
+$app->addRoutingMiddleware();
+
+$errorMiddleware = $app->addErrorMiddleware(false, true, true);
+
+$errorMiddleware->setDefaultErrorHandler(function ($request, $exception, $displayErrorDetails) use ($app, $container) {
+    $response = $app->getResponseFactory()->createResponse();
+    $router = $app->getRouteCollector()->getRouteParser();
+
+    $statusCode = 500;
+    $template = 'errors/500.phtml';
+
+    if ($exception instanceof HttpNotFoundException) {
+        $statusCode = 404;
+        $template = 'errors/404.phtml';
+    }
+
+    return $container->get('renderer')->render($response->withStatus($statusCode), $template, [
+        'message' => $exception->getMessage(),
+        'router' => $router
+    ]);
+});
+
+$app->add(function ($request, $handler) use ($container) {
+
+    $request = $request->withAttribute(
+        'flash',
+        $container->get('flash')->getMessages()
+    );
+
+    return $handler->handle($request);
+});
+
+$app->get('/', function ($request, $response) use ($router) {
 
     $params = [
         'url' => '',
         'errors' => [],
-        'flash' => $flash,
+        'flash' => $request->getAttribute('flash'),
+        'router' => $router
     ];
     return $this->get('renderer')->render($response, 'index.phtml', $params);
 })->setName('home');
 
-$app->get('/urls/{id}', function ($request, $response, $args) {
-    $flash = $this->get('flash')->getMessages();
+$app->get('/urls/{id:\d+}', function ($request, $response, $args) use ($router) {
 
     $id = $args['id'];
 
-    $pdo = $this->get(\PDO::class);
+    $pdo = $this->get(PDO::class);
     $urlSql = "SELECT * FROM urls WHERE id = :id";
     $stmt = $pdo->prepare($urlSql);
-    $stmt->bindParam(':id', $id);
-    $stmt->execute();
+    $stmt->execute([':id' => $id]);
     $url = $stmt->fetch();
 
-    try {
-        $checksSql = "SELECT * FROM url_checks WHERE url_id = :id ORDER BY created_at DESC";
-        $stmt = $pdo->prepare($checksSql);
-        $stmt->execute([':id' => $id]);
-        $checks = $stmt->fetchAll();
-    } catch (\PDOException $e) {
-        $checks = [];
+    if (!$url) {
+        throw new HttpNotFoundException($request);
     }
+
+    $checksSql = "SELECT * FROM url_checks WHERE url_id = :id ORDER BY created_at DESC";
+    $stmt = $pdo->prepare($checksSql);
+    $stmt->execute([':id' => $id]);
+    $checks = $stmt->fetchAll();
 
     $params = [
         'url' => $url,
         'errors' => [],
-        'flash' => $flash,
         'checks' => $checks,
+        'flash' => $request->getAttribute('flash'),
+        'router' => $router
     ];
     return $this->get('renderer')->render($response, 'urls/show.phtml', $params);
 })->setName('url');
 
-$app->get('/urls', function ($request, $response) {
-    $flash = $this->get('flash')->getMessages();
+$app->get('/urls', function ($request, $response) use ($router) {
 
-    $pdo = $this->get(\PDO::class);
-    $sql = "SELECT DISTINCT ON (urls.id)
-            urls.id,
-            urls.name,
-            urls.created_at,
-            url_checks.created_at AS last_check,
-            url_checks.status_code AS last_status_code
-            FROM urls
-            LEFT JOIN url_checks ON urls.id = url_checks.url_id
-            ORDER BY urls.id, url_checks.created_at DESC";
-    $stmt = $pdo->prepare($sql);
+    $pdo = $this->get(PDO::class);
+
+    $stmt = $pdo->prepare("
+        SELECT id, name, created_at
+        FROM urls
+        ORDER BY id DESC
+    ");
     $stmt->execute();
     $urls = $stmt->fetchAll();
 
-    usort($urls, function ($a, $b) {
-        $dateA = $a['last_check'] ?? '0000-00-00 00:00:00';
-        $dateB = $b['last_check'] ?? '0000-00-00 00:00:00';
-        return strcmp($dateB, $dateA);
-    });
+    $stmt = $pdo->prepare("
+        SELECT DISTINCT ON (url_id)
+            url_id,
+            created_at AS last_check,
+            status_code AS last_status_code
+        FROM url_checks
+        ORDER BY url_id, created_at DESC
+    ");
+    $stmt->execute();
+    $checks = $stmt->fetchAll();
+
+    foreach ($urls as &$url) {
+        $urlId = $url['id'];
+        $filtered = array_filter($checks, fn($item) => $item['url_id'] == $urlId);
+
+        $check = array_shift($filtered);
+        $url['last_check'] = $check['last_check'] ?? null;
+        $url['last_status_code'] = $check['last_status_code'] ?? null;
+    }
 
     $params = [
         'urls' => $urls,
         'errors' => [],
-        'flash' => $flash,
+        'flash' => $request->getAttribute('flash'),
+        'router' => $router
     ];
+
     return $this->get('renderer')->render($response, 'urls/index.phtml', $params);
 })->setName('urls');
 
-$app->post('/urls/{id}/checks', function ($request, $response, $args) use ($router) {
+$app->post('/urls/{id:\d+}/checks', function ($request, $response, $args) use ($router) {
 
     $urlId = $args['id'];
 
-    $pdo = $this->get(\PDO::class);
+    $pdo = $this->get(PDO::class);
     $urlSql = "SELECT name FROM urls WHERE id = :id";
     $stmt = $pdo->prepare($urlSql);
     $stmt->execute([':id' => $urlId]);
     $normalizedUrl = $stmt->fetchColumn();
 
-    $client = new \GuzzleHttp\Client(['timeout' => 5.0, 'http_errors' => true]);
-
-    $statusCode = null;
-    $h1 = '';
-    $title = '';
-    $description = '';
+    $client = new Client(['timeout' => 5.0, 'http_errors' => false]);
 
     try {
         $guzzleResponse = $client->get($normalizedUrl);
         $statusCode = $guzzleResponse->getStatusCode();
         $html = (string) $guzzleResponse->getBody();
-        $crawler = new \Symfony\Component\DomCrawler\Crawler($html);
+        $crawler = new Crawler($html);
 
-        $h1 = $crawler->filter('h1')->getNode(0)?->textContent;
-        $title = $crawler->filter('title')->getNode(0)?->textContent;
-        $description = $crawler->filter('meta[name="description"]')->attr('content');
+        $h1 = $crawler->filter('h1')->getNode(0)?->textContent ?? '';
+        $title = $crawler->filter('title')->getNode(0)?->textContent ?? '';
+
+        $description = $crawler->filter('meta[name="description"]')->count() > 0
+        ? $crawler->filter('meta[name="description"]')->attr('content')
+        : '';
 
         $this->get('flash')->addMessage('success', "Страница успешно проверена");
-    } catch (\Exception $e) {
+    } catch (Exception $e) {
         $this->get('flash')->addMessage('danger', "Произошла ошибка при проверке, не удалось подключиться");
 
         return $response->withRedirect($router->urlFor('url', ['id' => $urlId]), 303);
     }
 
-    $createdAt = \Carbon\Carbon::now()->toDateTimeString();
+    $createdAt = Carbon::now()->toDateTimeString();
     $sql = "INSERT INTO url_checks (url_id, status_code, h1, title, description, created_at)
                 VALUES (:url_id, :status_code, :h1, :title, :description, :created_at)";
     $stmt = $pdo->prepare($sql);
@@ -186,7 +233,7 @@ $app->post('/urls/{id}/checks', function ($request, $response, $args) use ($rout
     ]);
 
     return $response->withRedirect($router->urlFor('url', ['id' => $urlId]), 303);
-});
+})->setName('url_check');
 
 $app->post('/urls', function ($request, $response) use ($router) {
 
@@ -204,42 +251,42 @@ $app->post('/urls', function ($request, $response) use ($router) {
         $normalizedUrl = $url;
     }
 
-    $validator = new \Valitron\Validator(['url' => $normalizedUrl]);
+    $validator = new Validator(['url' => $normalizedUrl]);
 
     $validator->rule('required', 'url')->message('URL не должен быть пустым');
     $validator->rule('url', 'url')->message('Некорректный URL');
     $validator->rule('lengthMax', 'url', 255)->message('URL превышает 255 символов');
 
-    $pdo = $this->get(\PDO::class);
-    $id = null;
+    $pdo = $this->get(PDO::class);
 
     if ($validator->validate()) {
-        try {
-            $createdAt = \Carbon\Carbon::now()->toDateTimeString();
-            $sql = "INSERT INTO urls (name, created_at) VALUES (:name, :created_at)";
-            $stmt = $pdo->prepare($sql);
-            $stmt->execute([':name' => $normalizedUrl, ':created_at' => $createdAt]);
+        $stmt = $pdo->prepare("SELECT id FROM urls WHERE name = :name");
+        $stmt->execute([':name' => $normalizedUrl]);
+        $existingId = $stmt->fetchColumn();
 
-            $id = $pdo->lastInsertId();
-
-            $this->get('flash')->addMessage('success', "Страница успешно добавлена");
-        } catch (\PDOException $e) {
-            if ($e->getCode() === '23505') {
-                $stmt = $pdo->prepare("SELECT id FROM urls WHERE name = :name");
-                $stmt->execute([':name' => $normalizedUrl]);
-                $id = $stmt->fetchColumn();
-
-                $this->get('flash')->addMessage('danger', "Страница уже существует");
-            }
+        if ($existingId) {
+            $this->get('flash')->addMessage('danger', "Страница уже существует");
+            return $response->withRedirect($router->urlFor('url', ['id' => $existingId]), 303);
         }
+
+        $createdAt = Carbon::now()->toDateTimeString();
+
+        $sql = "INSERT INTO urls (name, created_at) VALUES (:name, :created_at)";
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute([':name' => $normalizedUrl, ':created_at' => $createdAt]);
+
+        $id = $pdo->lastInsertId();
+
+        $this->get('flash')->addMessage('success', "Страница успешно добавлена");
+
         return $response->withRedirect($router->urlFor('url', ['id' => $id]), 303);
     }
 
     $params = ['url' => $url,
                'errors' => $validator->errors(),
-               'flash' => $this->get('flash')->getMessages()
+               'router' => $router
     ];
     return $this->get('renderer')->render($response->withStatus(422), 'index.phtml', $params);
-});
+})->setName('url_store');
 
 $app->run();

@@ -1,0 +1,17 @@
+<div class="text-center py-5">
+    <h1 class="display-1 fw-bold text-danger">500</h1>
+    <h2 class="mb-4">Внутренняя ошибка сервера</h2>
+    <p class="lead mb-5">
+        Произошло что-то непредвиденное. Мы уже работаем над исправлением.
+    </p>
+    <?php if (isset($message) && !empty($message)): ?>
+        <div class="text-start mx-auto mb-4" style="max-width: 600px;">
+            <div class="card bg-light">
+                <div class="card-body">
+                    <code class="small text-muted"><?= htmlspecialchars($message) ?></code>
+                </div>
+            </div>
+        </div>
+    <?php endif; ?>
+    <a href="<?= $router->urlFor('home') ?>" class="btn btn-outline-dark">На главную</a>
+</div>

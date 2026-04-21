@@ -23,7 +23,7 @@
 
     <h2 class="mt-5 mb-3">Проверки</h2>
     
-    <form method="post" action="/urls/<?= htmlspecialchars($url['id']) ?>/checks">
+    <form method="post" action="<?= $router->urlFor('url_check', ['id' => $url['id']]) ?>">
         <input type="submit" class="btn btn-primary mb-3" value="Запустить проверку">
     </form>
 
