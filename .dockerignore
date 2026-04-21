@@ -1,0 +1,8 @@
+.git
+.env
+vendor
+composer.lock
+node_modules
+*.log
+.github
+sonar-project.properties
