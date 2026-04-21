@@ -77,7 +77,7 @@ $app->addRoutingMiddleware();
 
 $errorMiddleware = $app->addErrorMiddleware(false, true, true);
 
-$errorMiddleware->setDefaultErrorHandler(function ($request, $exception, $displayErrorDetails) use ($app, $container) {
+$errorMiddleware->setDefaultErrorHandler(function ($exception) use ($app, $container) {
     $response = $app->getResponseFactory()->createResponse();
     $router = $app->getRouteCollector()->getRouteParser();
 
