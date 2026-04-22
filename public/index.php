@@ -96,7 +96,7 @@ $errorMiddleware->setDefaultErrorHandler(function ($request, $exception, $displa
     ]);
 });
 
-$app->get('/', function ($request, $response) use ($router) {
+$app->get('/', function ($request, $response) {
 
     $params = [
         'url' => '',
@@ -105,7 +105,7 @@ $app->get('/', function ($request, $response) use ($router) {
     return $this->get('renderer')->render($response, 'index.phtml', $params);
 })->setName('home');
 
-$app->get('/urls/{id:\d+}', function ($request, $response, $args) use ($router) {
+$app->get('/urls/{id:\d+}', function ($request, $response, $args) {
 
     $id = $args['id'];
 
@@ -132,7 +132,7 @@ $app->get('/urls/{id:\d+}', function ($request, $response, $args) use ($router) 
     return $this->get('renderer')->render($response, 'urls/show.phtml', $params);
 })->setName('url');
 
-$app->get('/urls', function ($request, $response) use ($router) {
+$app->get('/urls', function ($request, $response) {
 
     $pdo = $this->get(PDO::class);
 
