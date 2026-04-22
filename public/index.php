@@ -27,7 +27,7 @@ if (file_exists($envFile)) {
 
 $container = new Container();
 
-$container->set('renderer', function () {
+$container->set('renderer', function ($container) {
     $renderer = new PhpRenderer(__DIR__ . '/../templates');
     $renderer->setLayout('layout.phtml');
     return $renderer;
@@ -73,13 +73,15 @@ $app = AppFactory::createFromContainer($container);
 
 $router = $app->getRouteCollector()->getRouteParser();
 
+$container->get('renderer')->addAttribute('router', $router);
+$container->get('renderer')->addAttribute('flash', $container->get('flash')->getMessages());
+
 $app->addRoutingMiddleware();
 
 $errorMiddleware = $app->addErrorMiddleware(false, true, true);
 
 $errorMiddleware->setDefaultErrorHandler(function ($request, $exception, $displayErrorDetails) use ($app, $container) {
     $response = $app->getResponseFactory()->createResponse();
-    $router = $app->getRouteCollector()->getRouteParser();
 
     $statusCode = 500;
     $template = 'errors/500.phtml';
@@ -90,28 +92,15 @@ $errorMiddleware->setDefaultErrorHandler(function ($request, $exception, $displa
     }
 
     return $container->get('renderer')->render($response->withStatus($statusCode), $template, [
-        'message' => $exception->getMessage(),
-        'router' => $router
+        'message' => $exception->getMessage()
     ]);
-});
-
-$app->add(function ($request, $handler) use ($container) {
-
-    $request = $request->withAttribute(
-        'flash',
-        $container->get('flash')->getMessages()
-    );
-
-    return $handler->handle($request);
 });
 
 $app->get('/', function ($request, $response) use ($router) {
 
     $params = [
         'url' => '',
-        'errors' => [],
-        'flash' => $request->getAttribute('flash'),
-        'router' => $router
+        'errors' => []
     ];
     return $this->get('renderer')->render($response, 'index.phtml', $params);
 })->setName('home');
@@ -138,9 +127,7 @@ $app->get('/urls/{id:\d+}', function ($request, $response, $args) use ($router) 
     $params = [
         'url' => $url,
         'errors' => [],
-        'checks' => $checks,
-        'flash' => $request->getAttribute('flash'),
-        'router' => $router
+        'checks' => $checks
     ];
     return $this->get('renderer')->render($response, 'urls/show.phtml', $params);
 })->setName('url');
@@ -168,20 +155,22 @@ $app->get('/urls', function ($request, $response) use ($router) {
     $stmt->execute();
     $checks = $stmt->fetchAll();
 
-    foreach ($urls as &$url) {
-        $urlId = $url['id'];
-        $filtered = array_filter($checks, fn($item) => $item['url_id'] == $urlId);
+    $checksById = array_column($checks, null, 'url_id');
 
-        $check = array_shift($filtered);
-        $url['last_check'] = $check['last_check'] ?? null;
-        $url['last_status_code'] = $check['last_status_code'] ?? null;
-    }
+    $urlsWithStatuses = array_map(function ($url) use ($checksById) {
+        $id = $url['id'];
+        $check = $checksById[$id] ?? null;
+        return [
+            'id' => $id,
+            'name' => $url['name'],
+            'last_check' =>  $check['last_check'] ?? null,
+            'last_status_code' => $check['last_status_code'] ?? null
+        ];
+    }, $urls);
 
     $params = [
-        'urls' => $urls,
-        'errors' => [],
-        'flash' => $request->getAttribute('flash'),
-        'router' => $router
+        'urls' => $urlsWithStatuses,
+        'errors' => []
     ];
 
     return $this->get('renderer')->render($response, 'urls/index.phtml', $params);
@@ -284,7 +273,6 @@ $app->post('/urls', function ($request, $response) use ($router) {
 
     $params = ['url' => $url,
                'errors' => $validator->errors(),
-               'router' => $router
     ];
     return $this->get('renderer')->render($response->withStatus(422), 'index.phtml', $params);
 })->setName('url_store');
