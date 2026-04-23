@@ -271,8 +271,9 @@ $app->post('/urls', function ($request, $response) use ($router) {
         return $response->withRedirect($router->urlFor('url', ['id' => $id]), 303);
     }
 
-    $params = ['url' => $url,
-               'errors' => $validator->errors(),
+    $params = [
+        'url' => $url,
+        'errors' => $validator->errors(),
     ];
     return $this->get('renderer')->render($response->withStatus(422), 'index.phtml', $params);
 })->setName('url_store');
